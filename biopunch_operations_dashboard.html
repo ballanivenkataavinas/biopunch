@@ -1,0 +1,1713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BioPunch | Campus Trainer Operations Dashboard</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Phosphor Icons CDN -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
+  <!-- Google Fonts Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- QRCode.js CDN for dynamic rolling QR generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              500: '#10b981',
+              600: '#059669',
+              900: '#064e3b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbar for dense operations display */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0f172a;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #475569;
+    }
+    .pulse-ring {
+      animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.15); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    /* QR pulse sweep line animation */
+    @keyframes scanSweep {
+      0% { top: 0%; opacity: 0.8; }
+      50% { top: 92%; opacity: 1; }
+      100% { top: 0%; opacity: 0.8; }
+    }
+    .scanner-laser {
+      position: absolute;
+      left: 6px;
+      right: 6px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, #10b981, #34d399, transparent);
+      box-shadow: 0 0 12px #10b981;
+      animation: scanSweep 2.2s ease-in-out infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans flex flex-col antialiased selection:bg-emerald-500 selection:text-white">
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Modal Backdrop for Ops Actions & Telemetry -->
+  <div id="action-modal" class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md hidden items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700/80 w-full max-w-2xl rounded-2xl p-6 shadow-2xl relative animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
+      <button onclick="closeModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white p-2 rounded-lg hover:bg-slate-800 transition">
+        <i class="ph ph-x text-lg"></i>
+      </button>
+      <div id="modal-content">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- TOP APP BAR -->
+  <header class="border-b border-slate-800 bg-slate-900/90 backdrop-blur sticky top-0 z-40 px-4 lg:px-8 py-3.5">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row md:items-center justify-between gap-4">
+      
+      <!-- Brand & Campus Context -->
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-gradient-to-tr from-emerald-600 via-teal-500 to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
+          <i class="ph ph-fingerprint text-2xl font-bold"></i>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-xl font-bold tracking-tight text-white flex items-center gap-1.5">
+              BioPunch 
+            </h1>
+            
+          </div>
+          <p class="text-xs text-slate-400 flex items-center gap-2 mt-0.5">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            LPU  • 20 Trainer Cohorts (Shift: 09:00 AM – 05:30 PM IST)
+          </p>
+        </div>
+      </div>
+
+      <!-- Live Simulator, IST Clock, & Views -->
+      <div class="flex items-center flex-wrap gap-2.5">
+        <!-- Live Clock badge in Indian Standard Time (IST) -->
+        <div class="flex items-center gap-2.5 bg-slate-800/90 border border-slate-700 px-3.5 py-1.5 rounded-xl shadow-inner">
+          <i class="ph ph-clock text-emerald-400 text-lg"></i>
+          <div>
+            <div class="text-[9px] text-slate-400 uppercase font-bold tracking-wider leading-none">Indian Standard Time (IST)</div>
+            <div id="live-clock" class="text-xs font-mono font-bold text-slate-100 tracking-wide mt-0.5">09:08:42 AM IST</div>
+          </div>
+        </div>
+
+        <!-- Simulation Tools -->
+        <div class="flex items-center gap-1 bg-slate-800/80 border border-slate-700/80 p-1 rounded-xl">
+          <button onclick="advanceTime(2)" title="Simulate 2 minutes ahead in IST" class="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-700 transition flex items-center gap-1">
+            <i class="ph ph-fast-forward text-amber-400"></i> +2m
+          </button>
+          <button onclick="advanceTime(5)" title="Simulate 5 minutes ahead in IST" class="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-200 hover:text-white hover:bg-slate-700 transition flex items-center gap-1">
+            <i class="ph ph-fast-forward text-rose-400 font-bold"></i> +5m
+          </button>
+          <button onclick="resetSimulation()" title="Reset simulation to 09:08 AM IST" class="px-2.5 py-1 rounded-lg text-xs font-medium text-slate-300 hover:text-white hover:bg-slate-700 transition flex items-center gap-1">
+            <i class="ph ph-arrows-clockwise text-emerald-400"></i> Reset
+          </button>
+        </div>
+
+        <!-- Direct Trigger for Dynamic Rolling QR Verification Modal -->
+        <button onclick="openDynamicQRModal()" class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/30 transition flex items-center gap-1.5 shadow-sm shadow-emerald-950">
+          <i class="ph ph-qr-code text-base font-bold"></i>
+          <span>Dynamic QR Fallback (10s)</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- PRIMARY NAVIGATION TABS -->
+    <div class="max-w-7xl mx-auto mt-3.5 pt-2 border-t border-slate-800/80 flex items-center gap-2 overflow-x-auto">
+      <button onclick="switchView('live-grid')" id="view-tab-live-grid" class="view-nav-btn px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-white border border-slate-700 flex items-center gap-2 transition">
+        <i class="ph ph-squares-four text-emerald-400"></i>
+        <span>Live 20-Room Matrix</span>
+      </button>
+      <button onclick="switchView('qr-verification')" id="view-tab-qr-verification" class="view-nav-btn px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 border border-transparent hover:bg-slate-800/50 flex items-center gap-2 transition">
+        <i class="ph ph-shield-check text-indigo-400"></i>
+        <span>Dynamic QR &amp; Geo Verification</span>
+      </button>
+      <button onclick="switchView('monthly-report')" id="view-tab-monthly-report" class="view-nav-btn px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 border border-transparent hover:bg-slate-800/50 flex items-center gap-2 transition">
+        <i class="ph ph-calendar-check text-amber-400"></i>
+        <span>30-Day Compliance &amp; Exception Audit</span>
+      </button>
+      <button onclick="switchView('impact-roi')" id="view-tab-impact-roi" class="view-nav-btn px-3.5 py-1.5 rounded-xl text-xs font-medium text-slate-400 hover:text-slate-200 border border-transparent hover:bg-slate-800/50 flex items-center gap-2 transition">
+        <i class="ph ph-chart-line-up text-teal-400"></i>
+        <span>Operations ROI &amp; Value Impact</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto w-full px-4 lg:px-8 py-6 space-y-6 flex-1">
+
+    <!-- ==================== VIEW 1: LIVE 20-ROOM MATRIX ==================== -->
+    <div id="view-live-grid" class="view-section space-y-6">
+
+      <!-- TOP OPERATIONAL KPI SUMMARY CARDS -->
+      <section class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        
+        <!-- Total Rooms -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-sm backdrop-blur">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400">Total Classrooms</span>
+            <div class="p-1.5 rounded-lg bg-slate-800 text-slate-300">
+              <i class="ph ph-chalkboard-teacher text-base"></i>
+            </div>
+          </div>
+          <div class="mt-2 text-2xl font-black text-white" id="kpi-total">20</div>
+          <div class="mt-1 text-[11px] text-slate-400">CS, Mech, MBA &amp; Tech Annex</div>
+        </div>
+
+        <!-- On Time (Green) -->
+        <div class="bg-slate-900/80 border border-emerald-500/30 rounded-2xl p-4 shadow-sm relative overflow-hidden backdrop-blur">
+          <div class="absolute top-0 right-0 w-16 h-16 bg-emerald-500/10 rounded-bl-full pointer-events-none"></div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-emerald-400 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 inline-block"></span> Verified &amp; On-Time
+            </span>
+            <div class="p-1.5 rounded-lg bg-emerald-500/20 text-emerald-400">
+              <i class="ph ph-check-circle text-base"></i>
+            </div>
+          </div>
+          <div class="mt-2 text-2xl font-black text-emerald-400" id="kpi-green">14</div>
+          <div class="mt-1 text-[11px] text-slate-400">Punched in &amp; class commenced</div>
+        </div>
+
+        <!-- In-Transit / Corridor Queue Delay (Amber) -->
+        <div class="bg-slate-900/80 border border-amber-500/30 rounded-2xl p-4 shadow-sm relative overflow-hidden backdrop-blur">
+          <div class="absolute top-0 right-0 w-16 h-16 bg-amber-500/10 rounded-bl-full pointer-events-none"></div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-amber-400 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-amber-400 inline-block"></span> In-Transit (+5m to +8m)
+            </span>
+            <div class="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+              <i class="ph ph-person-simple-walk text-base"></i>
+            </div>
+          </div>
+          <div class="mt-2 text-2xl font-black text-amber-400" id="kpi-amber">4</div>
+          <div class="mt-1 text-[11px] text-amber-400/80">Punched at HOD / Walking to class</div>
+        </div>
+
+        <!-- Critical / No Punch (Red) -->
+        <div class="bg-slate-900/80 border border-rose-500/30 rounded-2xl p-4 shadow-sm relative overflow-hidden backdrop-blur">
+          <div class="absolute top-0 right-0 w-16 h-16 bg-rose-500/10 rounded-bl-full pointer-events-none"></div>
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-rose-400 flex items-center gap-1">
+              <span class="w-2 h-2 rounded-full bg-rose-400 inline-block"></span> Critical (+8m+ No Punch)
+            </span>
+            <div class="p-1.5 rounded-lg bg-rose-500/20 text-rose-400">
+              <i class="ph ph-warning-octagon text-base"></i>
+            </div>
+          </div>
+          <div class="mt-2 text-2xl font-black text-rose-400" id="kpi-red">2</div>
+          <div class="mt-1 text-[11px] text-rose-400/80">QR Fallback / Standby Required</div>
+        </div>
+
+        <!-- Compliance Rate -->
+        <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-sm col-span-2 sm:col-span-2 lg:col-span-1 backdrop-blur">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-medium text-slate-400">Shift Punctuality</span>
+            <div class="p-1.5 rounded-lg bg-slate-800 text-indigo-400">
+              <i class="ph ph-chart-pie-slice text-base"></i>
+            </div>
+          </div>
+          <div class="mt-2 text-2xl font-black text-indigo-300" id="kpi-compliance">70%</div>
+          <div class="mt-1 flex items-center gap-1 text-[11px] text-emerald-400">
+            <i class="ph ph-arrow-up-right font-bold"></i> Dynamic QR verified: 2 trainers
+          </div>
+        </div>
+
+      </section>
+
+      <!-- OPERATIONAL CONTROLS & STATUS FILTER BAR -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-2xl border border-slate-800">
+        
+        <!-- Filter Tabs -->
+        <div class="flex items-center gap-1.5 flex-wrap">
+          <span class="text-xs text-slate-400 font-semibold px-2 uppercase tracking-wider">Live Status:</span>
+          <button onclick="setFilter('ALL')" id="tab-ALL" class="filter-tab px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-white shadow-sm border border-slate-700">
+            All (20)
+          </button>
+          <button onclick="setFilter('GREEN')" id="tab-GREEN" class="filter-tab px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900/80 text-slate-400 hover:text-emerald-300 border border-transparent">
+            On-Time (14)
+          </button>
+          <button onclick="setFilter('AMBER')" id="tab-AMBER" class="filter-tab px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900/80 text-slate-400 hover:text-amber-300 border border-transparent">
+            In-Transit (4)
+          </button>
+          <button onclick="setFilter('RED')" id="tab-RED" class="filter-tab px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-900/80 text-slate-400 hover:text-rose-300 border border-transparent">
+            Critical Alerts (2)
+          </button>
+        </div>
+
+        <!-- Quick Batch Actions -->
+        <div class="flex items-center gap-2">
+          <button onclick="triggerHODCongestionClear()" class="px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white transition flex items-center gap-1.5">
+            <i class="ph ph-path text-amber-400"></i> Clear HOD Bio Line (+Batch In)
+          </button>
+          <button onclick="broadcastAlert()" class="px-3 py-1.5 rounded-xl text-xs font-medium bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 transition flex items-center gap-1.5">
+            <i class="ph ph-broadcast"></i> Notify Floor Leads
+          </button>
+        </div>
+
+      </div>
+
+      <!-- MAIN WORKSPACE: 20-ROOM GRID + REAL-TIME ESCALATION PANEL -->
+      <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+        
+        <!-- 20-ROOM LIVE MATRIX (xl:col-span-8) -->
+        <section class="xl:col-span-8 space-y-4">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-2">
+              <h2 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                <i class="ph ph-squares-four text-emerald-400 text-lg"></i>
+                Live Campus Classroom Matrix
+              </h2>
+              <span class="text-xs text-slate-400">| Slot: 09:00 AM – 10:30 AM IST</span>
+            </div>
+            <span class="text-xs text-slate-400 hidden sm:inline">Real-time Biometric &amp; QR Telemetry</span>
+          </div>
+
+          <!-- The Room Cards Grid -->
+          <div id="classroom-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 2xl:grid-cols-3 gap-3.5">
+            <!-- Room cards populated dynamically by JS -->
+          </div>
+        </section>
+
+        <!-- EXCEPTION & ESCALATION SIDEBAR (xl:col-span-4) -->
+        <section class="xl:col-span-4 space-y-4">
+          
+          <!-- Dynamic QR Quick Fallback Box -->
+          <div class="bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-indigo-500/30 rounded-2xl p-4 shadow-sm relative overflow-hidden">
+            <div class="flex items-center justify-between pb-2 border-b border-indigo-500/20">
+              <h3 class="text-xs font-bold text-indigo-300 flex items-center gap-1.5 uppercase tracking-wide">
+                <i class="ph ph-qr-code text-indigo-400 text-sm"></i>
+                Bio Sync Failed? Use Dynamic QR
+              </h3>
+              <span class="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-mono">10s TOTP</span>
+            </div>
+            <p class="text-xs text-slate-300 mt-2.5 leading-relaxed">
+              If the HOD fingerprint device is lagged or failing to sync, trainers scan the dynamic QR via the internal company app. Verification checks campus Wi-Fi IP and GPS radius (&lt;50m).
+            </p>
+            <div class="mt-3 flex items-center gap-2">
+              <button onclick="openDynamicQRModal()" class="w-full py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition flex items-center justify-center gap-1.5 shadow-md shadow-indigo-950">
+                <i class="ph ph-shield-check text-sm"></i> Open Rolling QR Terminal
+              </button>
+            </div>
+          </div>
+
+          <!-- Automated Escalation Matrix SOP -->
+          <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-sm backdrop-blur">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <i class="ph ph-lightning text-amber-400 text-base"></i>
+                BioPunch SOP Escalation Rules
+              </h3>
+              <span class="px-2 py-0.5 rounded text-[10px] bg-slate-800 text-slate-300 font-mono">AUTOMATED</span>
+            </div>
+
+            <div class="mt-3.5 space-y-2.5 text-xs">
+              <div class="flex items-start gap-2.5 p-2 rounded-xl bg-slate-950/60 border border-slate-800">
+                <span class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-[10px] font-bold">0-5m IST</span>
+                <div class="text-slate-300 leading-tight">
+                  <span class="font-semibold text-slate-200">Grace Transit Buffer:</span> Walking from central HOD biometric device to classroom.
+                </div>
+              </div>
+
+              <div class="flex items-start gap-2.5 p-2 rounded-xl bg-amber-500/10 border border-amber-500/25">
+                <span class="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono text-[10px] font-bold">5-8m IST</span>
+                <div class="text-slate-300 leading-tight">
+                  <span class="font-semibold text-amber-200">Amber Alert:</span> WhatsApp prompt with dynamic QR link sent to trainer. Floor lead notified.
+                </div>
+              </div>
+
+              <div class="flex items-start gap-2.5 p-2 rounded-xl bg-rose-500/10 border border-rose-500/25">
+                <span class="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono text-[10px] font-bold">8m+ IST</span>
+                <div class="text-slate-300 leading-tight">
+                  <span class="font-semibold text-rose-200">Critical Red Alert:</span> Immediate IVR call. 1-click standby trainer dispatch to avoid empty classroom.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Active Exceptions & Incident Stream -->
+          <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 shadow-sm backdrop-blur">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                <i class="ph ph-warning text-rose-400 text-base"></i>
+                Active Exceptions &amp; Actions
+              </h3>
+              <span id="exception-badge" class="px-2 py-0.5 rounded-full text-[10px] bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30">
+                6 Flagged
+              </span>
+            </div>
+
+            <div id="exception-list" class="mt-3.5 space-y-3 max-h-[380px] overflow-y-auto pr-1">
+              <!-- Dynamic Exceptions injected via JS -->
+            </div>
+          </div>
+
+        </section>
+
+      </div>
+    </div>
+
+    <!-- ==================== VIEW 2: DYNAMIC QR & GEO-FENCING ENGINE ==================== -->
+    <div id="view-qr-verification" class="view-section hidden space-y-6">
+      
+      <!-- Feature Header -->
+      <div class="bg-gradient-to-r from-slate-900 via-indigo-950/40 to-slate-900 border border-indigo-500/30 rounded-2xl p-6">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+                <i class="ph ph-qr-code text-2xl font-bold"></i>
+              </span>
+              <div>
+                <h2 class="text-lg font-bold text-white">Anti-Fraud Dynamic Rolling QR Scanner Terminal</h2>
+                <p class="text-xs text-slate-400">Fallback biometric failover: Rotates cryptographic seed every 10 seconds to stop photo sharing &amp; remote proxy punching.</p>
+              </div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="text-right">
+              <div class="text-[10px] uppercase font-bold text-slate-400">Campus Wi-Fi Gateway</div>
+              <div class="text-xs font-mono font-bold text-emerald-400">172.16.42.1 (Subnet Authorized)</div>
+            </div>
+            <div class="h-8 w-px bg-slate-800"></div>
+            <div class="text-right">
+              <div class="text-[10px] uppercase font-bold text-slate-400">Geo-Fence Perimeter</div>
+              <div class="text-xs font-mono font-bold text-indigo-400">12.9716° N, 77.5946° E (±50m)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Two Column Layout: Rolling QR Simulator + Live App Scanner Simulation -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Column 1: The Rolling QR Display Terminal (Rotates every 10s) -->
+        <div class="lg:col-span-5 bg-slate-900 border border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-between text-center relative overflow-hidden">
+          
+          <div class="w-full flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="text-xs font-bold text-slate-200 uppercase tracking-wide">University Display Terminal #04</span>
+            </div>
+            <span class="text-[11px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">LIVE TOKEN</span>
+          </div>
+
+          <!-- Dynamic QR Container -->
+          <div class="relative p-4 bg-white rounded-2xl shadow-2xl flex items-center justify-center my-2">
+            <div id="dynamic-qr-canvas" class="w-[200px] h-[200px] flex items-center justify-center"></div>
+            <!-- Laser scanning animation bar -->
+            <div class="scanner-laser"></div>
+          </div>
+
+          <!-- Rolling 10s Timer & Countdown Bar -->
+          <div class="w-full mt-4 space-y-2">
+            <div class="flex items-center justify-between text-xs">
+              <span class="text-slate-400">Seed Token Rotation In:</span>
+              <span id="qr-timer-seconds" class="font-mono font-bold text-amber-400">10s</span>
+            </div>
+            <!-- Progress Bar -->
+            <div class="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+              <div id="qr-progress-bar" class="h-full bg-gradient-to-r from-emerald-500 to-indigo-500 transition-all duration-1000 ease-linear w-full"></div>
+            </div>
+            <div class="text-[10px] font-mono text-slate-500 pt-1" id="qr-hash-display">
+              SHA256: 8fbc92e...4d10 | Shift Slot: 09:00 AM IST
+            </div>
+          </div>
+
+          <!-- Geo-Fence & IP Validation Badge -->
+          <div class="mt-4 pt-3 border-t border-slate-800 w-full grid grid-cols-2 gap-2 text-left text-[11px]">
+            <div class="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
+              <span class="text-slate-400 block text-[10px]">Verified IP Gate</span>
+              <span class="text-emerald-400 font-mono font-semibold">172.16.42.103</span>
+            </div>
+            <div class="bg-slate-950/60 p-2 rounded-xl border border-slate-800">
+              <span class="text-slate-400 block text-[10px]">GPS Radius</span>
+              <span class="text-emerald-400 font-mono font-semibold">Within 18m (&lt;50m)</span>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Column 2: Trainer Mobile App Scanner Simulator & Verification Log -->
+        <div class="lg:col-span-7 space-y-4">
+          
+          <!-- Interactive Scan Execution Card -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2 mb-3">
+              <i class="ph ph-device-mobile-camera text-emerald-400 text-lg"></i>
+              Company App Scanner Simulation (Trainer Self-Verification)
+            </h3>
+            
+            <p class="text-xs text-slate-400 mb-4 leading-relaxed">
+              Select any pending/delayed trainer below to simulate instant QR scanning via their internal company app. The system automatically inspects Geo-coordinates and Campus Wi-Fi subnet.
+            </p>
+
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div class="sm:col-span-2">
+                <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Select Trainer Requiring Punch</label>
+                <select id="qr-trainer-select" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+                  <!-- Populated by JS -->
+                </select>
+              </div>
+
+              <div>
+                <label class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block mb-1">Punch Type</label>
+                <select id="qr-punch-type" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500">
+                  <option value="IN">Punch-In (Morning)</option>
+                  <option value="OUT">Punch-Out (Evening)</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="mt-4 flex items-center justify-between pt-3 border-t border-slate-800">
+              <div class="flex items-center gap-2 text-xs text-slate-400">
+                <i class="ph ph-shield-check text-emerald-400 text-base"></i>
+                <span>Anti-Proxy Security Check Active</span>
+              </div>
+              <button onclick="simulateTrainerAppScan()" class="px-5 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-950 transition flex items-center gap-1.5">
+                <i class="ph ph-scan font-bold"></i> Authenticate &amp; Sync Punch
+              </button>
+            </div>
+          </div>
+
+          <!-- Dynamic Verification Logs Stream -->
+          <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-sm">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                <i class="ph ph-list-dashes text-indigo-400"></i>
+                Live Audit Logs (Biometric vs. Dynamic QR Telemetry)
+              </h3>
+              <span class="text-[10px] text-slate-400 font-mono">IST Timestamps</span>
+            </div>
+
+            <div class="mt-3 overflow-x-auto">
+              <table class="w-full text-left text-xs text-slate-300">
+                <thead class="bg-slate-950/70 uppercase text-[10px] text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th class="py-2.5 px-3">Trainer &amp; Room</th>
+                    <th class="py-2.5 px-3">Verification Method</th>
+                    <th class="py-2.5 px-3">IST Timestamp</th>
+                    <th class="py-2.5 px-3">Campus IP &amp; Subnet</th>
+                    <th class="py-2.5 px-3">Geo-Radius</th>
+                    <th class="py-2.5 px-3 text-right">Result</th>
+                  </tr>
+                </thead>
+                <tbody id="qr-logs-tbody" class="divide-y divide-slate-800 font-mono text-[11px]">
+                  <!-- Injected via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ==================== VIEW 3: 30-DAY MONTHLY COMPLIANCE AUDIT ==================== -->
+    <div id="view-monthly-report" class="view-section hidden space-y-6">
+      
+      <!-- Header & Export Bar -->
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-900 border border-slate-800 rounded-2xl p-5">
+        <div>
+          <div class="flex items-center gap-2">
+            <span class="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+              <i class="ph ph-calendar-check text-xl font-bold"></i>
+            </span>
+            <h2 class="text-base font-bold text-white">30-Day Campus Compliance &amp; Delay Audit Report</h2>
+          </div>
+          <p class="text-xs text-slate-400 mt-1">
+            Tracking 20 trainers across 24 working days in IST. Aggregated data on repeated delays, biometric sync misses, and dynamic QR failover utilization.
+          </p>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="exportReportCSV()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center gap-1.5 shadow-sm">
+            <i class="ph ph-file-csv text-base text-emerald-400"></i> Export CSV
+          </button>
+          <button onclick="window.print()" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white transition flex items-center gap-1.5 shadow-sm shadow-emerald-950">
+            <i class="ph ph-printer text-base"></i> Print Audit
+          </button>
+        </div>
+      </div>
+
+      <!-- Monthly Summary KPI Stats -->
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+          <div class="text-xs text-slate-400 font-medium">30-Day Campus Compliance</div>
+          <div class="text-2xl font-black text-emerald-400 mt-1">94.8%</div>
+          <div class="text-[11px] text-emerald-500/80 mt-0.5">+32% compared to manual sign-in</div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+          <div class="text-xs text-slate-400 font-medium">Total Missed Punches (Unresolved)</div>
+          <div class="text-2xl font-black text-rose-400 mt-1" id="audit-stat-missed">11</div>
+          <div class="text-[11px] text-rose-400/80 mt-0.5">Across 480 cumulative sessions</div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+          <div class="text-xs text-slate-400 font-medium">Total Repeated Delays (>5 mins)</div>
+          <div class="text-2xl font-black text-amber-400 mt-1" id="audit-stat-delays">27</div>
+          <div class="text-[11px] text-slate-400 mt-0.5">Predominantly HOD queue rush</div>
+        </div>
+
+        <div class="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
+          <div class="text-xs text-slate-400 font-medium">Dynamic QR Failover Punches</div>
+          <div class="text-2xl font-black text-indigo-400 mt-1" id="audit-stat-qr">84</div>
+          <div class="text-[11px] text-indigo-400/80 mt-0.5">17.5% bio hardware sync saves</div>
+        </div>
+      </div>
+
+      <!-- FILTER CONTROLS BAR: Block, Subject, Repeated Delay Flags, Search -->
+      <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800/80">
+          <span class="text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+            <i class="ph ph-funnel text-emerald-400"></i> Audit Filters &amp; Exception Drilldown
+          </span>
+          <button onclick="resetAuditFilters()" class="text-[11px] text-slate-400 hover:text-emerald-400 transition flex items-center gap-1">
+            <i class="ph ph-arrows-counter-clockwise"></i> Reset Filters
+          </button>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+          <!-- Filter 1: Campus Block -->
+          <div>
+            <label class="block text-[11px] text-slate-400 font-medium mb-1">Campus Block</label>
+            <select id="filter-block" onchange="applyAuditFilters()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500">
+              <option value="ALL">All Blocks (CS, Mech, MBA, Tech Annex)</option>
+              <option value="CS Block">CS Block</option>
+              <option value="Mech Block">Mech Block</option>
+              <option value="MBA Block">MBA Block</option>
+              <option value="Tech Annex">Tech Annex</option>
+            </select>
+          </div>
+
+          <!-- Filter 2: Subject Domain -->
+          <div>
+            <label class="block text-[11px] text-slate-400 font-medium mb-1">Subject / Cohort</label>
+            <select id="filter-subject" onchange="applyAuditFilters()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500">
+              <option value="ALL">All Subjects</option>
+              <option value="Java">Full Stack Java</option>
+              <option value="Python">Python &amp; AI/ML</option>
+              <option value="Cloud">Cloud Architecture (AWS)</option>
+              <option value="Robotics">Robotics / AutoCAD</option>
+              <option value="Marketing">Marketing / Finance (MBA)</option>
+              <option value="DevOps">DevOps &amp; GenAI</option>
+            </select>
+          </div>
+
+          <!-- Filter 3: Compliance Status / Repeated Offender -->
+          <div>
+            <label class="block text-[11px] text-slate-400 font-medium mb-1">Compliance &amp; Exception Tag</label>
+            <select id="filter-compliance-tag" onchange="applyAuditFilters()" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500">
+              <option value="ALL">All Compliance Records</option>
+              <option value="REPEATED_DELAYS">Repeated Delays (3+ times)</option>
+              <option value="MISSED_PUNCH">Frequent Missed Punches</option>
+              <option value="HIGH_QR">Heavy QR Fallback User (>5 scans)</option>
+              <option value="CLEAN">Clean Record (&ge;96% On-Time)</option>
+            </select>
+          </div>
+
+          <!-- Filter 4: Search Trainer or Room -->
+          <div>
+            <label class="block text-[11px] text-slate-400 font-medium mb-1">Search Trainer / Room</label>
+            <div class="relative">
+              <input type="text" id="filter-search" oninput="applyAuditFilters()" placeholder="Type trainer name or room..." class="w-full bg-slate-950 border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-slate-200 focus:outline-none focus:border-emerald-500 placeholder-slate-600">
+              <i class="ph ph-magnifying-glass absolute left-2.5 top-2.5 text-slate-500 text-sm"></i>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 30-Day Detailed Audit Table -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-950/80 uppercase text-[10px] text-slate-400 border-b border-slate-800">
+              <tr>
+                <th class="py-3 px-4">Trainer &amp; Room</th>
+                <th class="py-3 px-3">Subject / Block</th>
+                <th class="py-3 px-3 text-center">Sessions</th>
+                <th class="py-3 px-3 text-center text-emerald-400">On-Time</th>
+                <th class="py-3 px-3 text-center text-amber-400">Delays (>5m)</th>
+                <th class="py-3 px-3 text-center text-rose-400">Missed Punches</th>
+                <th class="py-3 px-3">Avg Punch-In (IST)</th>
+                <th class="py-3 px-3">Avg Punch-Out (IST)</th>
+                <th class="py-3 px-3 text-center">Bio vs. QR %</th>
+                <th class="py-3 px-4 text-right">Audit Status</th>
+              </tr>
+            </thead>
+            <tbody id="audit-table-tbody" class="divide-y divide-slate-800/80">
+              <!-- Dynamically populated rows via JS -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Table Footer / Count -->
+        <div class="p-3 bg-slate-950/60 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+          <span id="audit-row-count">Showing 20 of 20 trainers</span>
+          <span class="text-[11px] font-mono">Month: October 2026 • Apex University Shift 1</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ==================== VIEW 4: MEASURABLE VALUE & IMPACT TABLE ==================== -->
+    <div id="view-impact-roi" class="view-section hidden space-y-6">
+      
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-sm">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 border-b border-slate-800">
+          <div>
+            <div class="flex items-center gap-2">
+              <span class="p-2 rounded-xl bg-emerald-500/20 text-emerald-400">
+                <i class="ph ph-chart-line-up font-bold text-xl"></i>
+              </span>
+              <h2 class="text-lg font-bold text-white">Operations Impact &amp; Value Creation (Before vs. After)</h2>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">
+              Key operational metrics demonstrating the efficiency gained through automated biometric visibility + dynamic QR failover vs manual floor chases.
+            </p>
+          </div>
+          <div class="text-xs text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-3.5 py-2 rounded-xl self-start md:self-auto flex items-center gap-2">
+            <i class="ph ph-trophy text-base"></i>
+            <span>8.5 Operations Hours Saved Weekly</span>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto mt-4">
+          <table class="w-full text-left text-xs text-slate-300">
+            <thead class="bg-slate-950 uppercase text-[10px] tracking-wider text-slate-400 border-b border-slate-800">
+              <tr>
+                <th scope="col" class="py-3 px-4">Key Operational Dimension</th>
+                <th scope="col" class="py-3 px-4 text-rose-300">Before (Manual University Chaos)</th>
+                <th scope="col" class="py-3 px-4 text-emerald-300">After (BioPunch + Dynamic QR + IST SOP)</th>
+                <th scope="col" class="py-3 px-4 text-right">Quantifiable Value / ROI</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-800">
+              <tr class="hover:bg-slate-800/40 transition">
+                <td class="py-3.5 px-4 font-semibold text-white flex items-center gap-2">
+                  <i class="ph ph-fingerprint text-emerald-400 text-sm"></i>
+                  Biometric Punch Compliance
+                </td>
+                <td class="py-3.5 px-4 text-slate-300">
+                  <span class="text-rose-400 font-bold">62% compliance.</span> Forgotten punches due to 9:00 AM rush &amp; long line at HOD office.
+                </td>
+                <td class="py-3.5 px-4 text-slate-300">
+                  <span class="text-emerald-400 font-bold">96% - 98% compliance.</span> Live status matrix + instant 10s Dynamic QR backup when hardware lags.
+                </td>
+                <td class="py-3.5 px-4 text-right font-bold text-emerald-400">
+                  +36% Compliance Spike
+                </td>
+              </tr>
+
+              <tr class="hover:bg-slate-800/40 transition">
+                <td class="py-3.5 px-4 font-semibold text-white flex items-center gap-2">
+                  <i class="ph ph-hourglass-medium text-amber-400 text-sm"></i>
+                  Student Waiting &amp; Idle Lecture Time
+                </td>
+                <td class="py-3.5 px-4 text-slate-300">
+                  <span class="text-rose-400 font-bold">15 to 25 mins lost</span> per delayed trainer while students sat idle, waiting blindly or complaining.
+                </td>
+                <td class="py-3.5 px-4 text-slate-300">
+                  <span class="text-emerald-400 font-bold">&lt; 4 mins maximum.</span> Standby trainer auto-alerted at T+8m mark; students briefed immediately.
+                </td>
+                <td class="py-3.5 px-4 text-right font-bold text-emerald-400">
+                  84% Drop in Student Idle Time
+                </td>
+              </tr>
+
+              <tr class="hover:bg-slate-800/40 transition">
+                <td class="py-3.5 px-4 font-semibold text-white flex items-center gap-2">
+                  <i class="ph ph-phone-call text-indigo-400 text-sm"></i>
+                  Operations Intern / Coordinator Workload
+                </td>
+                <td class="py-3.5 px-4 text-slate-300">
+                  <span class="text-rose-400 font-bold">Manual chaos.</span> Intern made 20-30 desperate repeated calls and physical sprint rounds between blocks.
+                </td>
+                <td class="py-3.5 px-4 text-slate-300">
+                  <span class="text-emerald-400 font-bold">Zero panic calling.</span> Dashboard auto-prioritizes only the 2-3 genuine exceptions with 1-click actions.
+                </td>
+                <td class="py-3.5 px-4 text-right font-bold text-emerald-400">
+                  ~1.5 Ops Hours Saved / Day
+                </td>
+              </tr>
+
+              <tr class="hover:bg-slate-800/40 transition">
+                <td class="py-3.5 px-4 font-semibold text-white flex items-center gap-2">
+                  <i class="ph ph-shield-check text-purple-400 text-sm"></i>
+                  Hardware Failover &amp; Anti-Proxy
+                </td>
+                <td class="py-3.5 px-4 text-slate-300">
+                  <span class="text-rose-400 font-bold">Single point of failure.</span> When biometric scanner failed or lagged, punches went unrecorded.
+                </td>
+                <td class="py-3.5 px-4 text-slate-300">
+                  <span class="text-emerald-400 font-bold">Dynamic 10s QR + Geo-Fencing.</span> Rotating QR code verifies within &lt;50m campus Wi-Fi perimeter.
+                </td>
+                <td class="py-3.5 px-4 text-right font-bold text-emerald-400">
+                  Zero Hardware Downtime Loss
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="mt-auto border-t border-slate-800 bg-slate-950 py-4 px-6 text-center text-xs text-slate-500">
+    BioPunch Campus Orchestration System • Configured for Indian Standard Time (IST) • Built for University Operations Interns
+  </footer>
+
+  <!-- SCRIPT FOR STATE & INTERACTIVITY -->
+  <script>
+    // Initial Simulated State: 20 Trainers across campus classrooms with IST Timestamps
+    const initialTrainers = [
+      { id: 1, room: "Room 101", block: "CS Block", trainer: "Dr. Arvind Rao", module: "Full Stack Java", scheduled: "09:00 AM IST", punchInTime: "08:52:10 AM IST", punchOutTime: "05:32:00 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11201", ip: "172.16.42.101" },
+      { id: 2, room: "Room 102", block: "CS Block", trainer: "Pooja Sharma", module: "Data Structures & Algorithms", scheduled: "09:00 AM IST", punchInTime: "08:54:35 AM IST", punchOutTime: "05:30:15 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11202", ip: "172.16.42.102" },
+      { id: 3, room: "Room 103", block: "CS Block", trainer: "Karthik Nair", module: "Cloud Architecture (AWS)", scheduled: "09:00 AM IST", punchInTime: "08:56:02 AM IST", punchOutTime: "05:35:10 PM IST", status: "GREEN", method: "DYNAMIC_QR", delayMinutes: 0, phone: "+91 98450 11203", ip: "172.16.42.105" },
+      { id: 4, room: "Room 104", block: "CS Block", trainer: "Rohan Varma", module: "React & Modern UI", scheduled: "09:00 AM IST", punchInTime: "08:55:18 AM IST", punchOutTime: "05:29:45 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11204", ip: "172.16.42.104" },
+      { id: 5, room: "Room 105", block: "CS Block", trainer: "Sneha Patel", module: "Python for AI/ML", scheduled: "09:00 AM IST", punchInTime: "09:03:12 AM IST", punchOutTime: null, status: "AMBER", method: "BIOMETRIC", delayMinutes: 5, note: "Punched at HOD machine, walking to 2nd fl", phone: "+91 98450 11205", ip: "172.16.42.110" },
+      { id: 6, room: "Room 106", block: "CS Block", trainer: "Vikram Sethi", module: "Cyber Security Fundamentals", scheduled: "09:00 AM IST", punchInTime: null, punchOutTime: null, status: "RED", method: "NONE", delayMinutes: 9, note: "No biometric punch logged. 9 mins overdue.", phone: "+91 98450 11206", ip: "Unknown" },
+      
+      { id: 7, room: "Room 201", block: "Mech Block", trainer: "Amitabh Sen", module: "AutoCAD & 3D Modeling", scheduled: "09:00 AM IST", punchInTime: "08:50:40 AM IST", punchOutTime: "05:31:00 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11207", ip: "172.16.42.120" },
+      { id: 8, room: "Room 202", block: "Mech Block", trainer: "Deepa Menon", module: "Robotics Kinematics", scheduled: "09:00 AM IST", punchInTime: "08:53:20 AM IST", punchOutTime: "05:33:45 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11208", ip: "172.16.42.121" },
+      { id: 9, room: "Room 203", block: "Mech Block", trainer: "Sanjay Singhania", module: "Thermodynamics Lab", scheduled: "09:00 AM IST", punchInTime: "08:55:50 AM IST", punchOutTime: "05:28:10 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11209", ip: "172.16.42.122" },
+      { id: 10, room: "Room 204", block: "Mech Block", trainer: "Manish Kulkarni", module: "Manufacturing Tech", scheduled: "09:00 AM IST", punchInTime: null, punchOutTime: null, status: "RED", method: "NONE", delayMinutes: 11, note: "11 mins overdue! Students waiting in lab.", phone: "+91 98450 11210", ip: "Unknown" },
+      { id: 11, room: "Room 205", block: "Mech Block", trainer: "Geeta Iyengar", module: "Fluid Mechanics", scheduled: "09:00 AM IST", punchInTime: "09:04:15 AM IST", punchOutTime: null, status: "AMBER", method: "BIOMETRIC", delayMinutes: 6, note: "Punched at HOD; walking 500m across quad", phone: "+91 98450 11211", ip: "172.16.42.125" },
+      { id: 12, room: "Room 206", block: "Mech Block", trainer: "Tariq Mansoor", module: "Industrial IoT", scheduled: "09:00 AM IST", punchInTime: "08:56:45 AM IST", punchOutTime: "05:30:00 PM IST", status: "GREEN", method: "DYNAMIC_QR", delayMinutes: 0, phone: "+91 98450 11212", ip: "172.16.42.128" },
+
+      { id: 13, room: "Room 301", block: "MBA Block", trainer: "Ananya Roy", module: "Digital Marketing Analytics", scheduled: "09:00 AM IST", punchInTime: "08:51:30 AM IST", punchOutTime: "05:30:20 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11213", ip: "172.16.42.140" },
+      { id: 14, room: "Room 302", block: "MBA Block", trainer: "Nikhil Joshi", module: "Financial Modeling", scheduled: "09:00 AM IST", punchInTime: "08:55:05 AM IST", punchOutTime: "05:34:00 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11214", ip: "172.16.42.141" },
+      { id: 15, room: "Room 303", block: "MBA Block", trainer: "Tanvi Saxena", module: "Operations & Supply Chain", scheduled: "09:00 AM IST", punchInTime: "09:05:40 AM IST", punchOutTime: null, status: "AMBER", method: "BIOMETRIC", delayMinutes: 7, note: "Held up in queue at HOD corridor device", phone: "+91 98450 11215", ip: "172.16.42.142" },
+      { id: 16, room: "Room 304", block: "MBA Block", trainer: "Harish Pillai", module: "Human Resource Mgmt", scheduled: "09:00 AM IST", punchInTime: "08:54:50 AM IST", punchOutTime: "05:31:10 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11216", ip: "172.16.42.143" },
+      { id: 17, room: "Room 305", block: "MBA Block", trainer: "Meera Bhat", module: "Business Strategy", scheduled: "09:00 AM IST", punchInTime: "08:57:00 AM IST", punchOutTime: "05:35:00 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11217", ip: "172.16.42.144" },
+      { id: 18, room: "Room 306", block: "MBA Block", trainer: "Rajeshwar Das", module: "FinTech & Blockchain", scheduled: "09:00 AM IST", punchInTime: "09:05:10 AM IST", punchOutTime: null, status: "AMBER", method: "BIOMETRIC", delayMinutes: 7, note: "Stairway transit from administrative wing", phone: "+91 98450 11218", ip: "172.16.42.145" },
+
+      { id: 19, room: "Room 309", block: "Tech Annex", trainer: "Farhan Qureshi", module: "DevOps & Docker", scheduled: "09:00 AM IST", punchInTime: "08:52:45 AM IST", punchOutTime: "05:30:00 PM IST", status: "GREEN", method: "BIOMETRIC", delayMinutes: 0, phone: "+91 98450 11219", ip: "172.16.42.160" },
+      { id: 20, room: "Room 310", block: "Tech Annex", trainer: "Devika Pillai", module: "Prompt Engineering & GenAI", scheduled: "09:00 AM IST", punchInTime: "08:54:12 AM IST", punchOutTime: "05:32:45 PM IST", status: "GREEN", method: "DYNAMIC_QR", delayMinutes: 0, phone: "+91 98450 11220", ip: "172.16.42.161" }
+    ];
+
+    // Standby trainers available on campus
+    const standbyTrainers = [
+      { name: "Rahul Deshmukh", expertise: "Full Stack / Java / Web", location: "Staff Lounge A", status: "Ready" },
+      { name: "Simran Kaur", expertise: "Data Science / Python / ML", location: "Library Annex", status: "Ready" },
+      { name: "Kunal Mehra", expertise: "Core Mech / CAD / IoT", location: "Staff Lounge B", status: "Ready" }
+    ];
+
+    // 30-Day Audit Data (Simulated 24 working days in a month for the 20 trainers)
+    const monthlyAuditData = [
+      { id: 1, trainer: "Dr. Arvind Rao", room: "Room 101", block: "CS Block", subject: "Full Stack Java", scheduledSessions: 24, onTime: 23, delays: 1, missed: 0, avgIn: "08:53 AM IST", avgOut: "05:31 PM IST", bioPct: 92, qrPct: 8, auditStatus: "COMPLIANT" },
+      { id: 2, trainer: "Pooja Sharma", room: "Room 102", block: "CS Block", subject: "Data Structures & Algorithms", scheduledSessions: 24, onTime: 24, delays: 0, missed: 0, avgIn: "08:54 AM IST", avgOut: "05:30 PM IST", bioPct: 100, qrPct: 0, auditStatus: "COMPLIANT" },
+      { id: 3, trainer: "Karthik Nair", room: "Room 103", block: "CS Block", subject: "Cloud Architecture (AWS)", scheduledSessions: 24, onTime: 21, delays: 2, missed: 1, avgIn: "08:58 AM IST", avgOut: "05:34 PM IST", bioPct: 70, qrPct: 30, auditStatus: "COMPLIANT" },
+      { id: 4, trainer: "Rohan Varma", room: "Room 104", block: "CS Block", subject: "React & Modern UI", scheduledSessions: 24, onTime: 23, delays: 1, missed: 0, avgIn: "08:55 AM IST", avgOut: "05:30 PM IST", bioPct: 95, qrPct: 5, auditStatus: "COMPLIANT" },
+      { id: 5, trainer: "Sneha Patel", room: "Room 105", block: "CS Block", subject: "Python for AI/ML", scheduledSessions: 24, onTime: 18, delays: 5, missed: 1, avgIn: "09:04 AM IST", avgOut: "05:30 PM IST", bioPct: 65, qrPct: 35, auditStatus: "REPEATED_DELAYS" },
+      { id: 6, trainer: "Vikram Sethi", room: "Room 106", block: "CS Block", subject: "Cyber Security Fundamentals", scheduledSessions: 24, onTime: 16, delays: 4, missed: 4, avgIn: "09:09 AM IST", avgOut: "05:25 PM IST", bioPct: 50, qrPct: 50, auditStatus: "ESCALATED_WARNING" },
+      
+      { id: 7, trainer: "Amitabh Sen", room: "Room 201", block: "Mech Block", subject: "AutoCAD & 3D Modeling", scheduledSessions: 24, onTime: 24, delays: 0, missed: 0, avgIn: "08:51 AM IST", avgOut: "05:31 PM IST", bioPct: 100, qrPct: 0, auditStatus: "COMPLIANT" },
+      { id: 8, trainer: "Deepa Menon", room: "Room 202", block: "Mech Block", subject: "Robotics Kinematics", scheduledSessions: 24, onTime: 23, delays: 1, missed: 0, avgIn: "08:54 AM IST", avgOut: "05:33 PM IST", bioPct: 95, qrPct: 5, auditStatus: "COMPLIANT" },
+      { id: 9, trainer: "Sanjay Singhania", room: "Room 203", block: "Mech Block", subject: "Thermodynamics Lab", scheduledSessions: 24, onTime: 22, delays: 2, missed: 0, avgIn: "08:56 AM IST", avgOut: "05:29 PM IST", bioPct: 90, qrPct: 10, auditStatus: "COMPLIANT" },
+      { id: 10, trainer: "Manish Kulkarni", room: "Room 204", block: "Mech Block", subject: "Manufacturing Tech", scheduledSessions: 24, onTime: 15, delays: 6, missed: 3, avgIn: "09:08 AM IST", avgOut: "05:28 PM IST", bioPct: 55, qrPct: 45, auditStatus: "ESCALATED_WARNING" },
+      { id: 11, trainer: "Geeta Iyengar", room: "Room 205", block: "Mech Block", subject: "Fluid Mechanics", scheduledSessions: 24, onTime: 19, delays: 4, missed: 1, avgIn: "09:03 AM IST", avgOut: "05:30 PM IST", bioPct: 60, qrPct: 40, auditStatus: "REPEATED_DELAYS" },
+      { id: 12, trainer: "Tariq Mansoor", room: "Room 206", block: "Mech Block", subject: "Industrial IoT", scheduledSessions: 24, onTime: 22, delays: 2, missed: 0, avgIn: "08:57 AM IST", avgOut: "05:30 PM IST", bioPct: 75, qrPct: 25, auditStatus: "COMPLIANT" },
+
+      { id: 13, trainer: "Ananya Roy", room: "Room 301", block: "MBA Block", subject: "Digital Marketing Analytics", scheduledSessions: 24, onTime: 24, delays: 0, missed: 0, avgIn: "08:52 AM IST", avgOut: "05:30 PM IST", bioPct: 96, qrPct: 4, auditStatus: "COMPLIANT" },
+      { id: 14, trainer: "Nikhil Joshi", room: "Room 302", block: "MBA Block", subject: "Financial Modeling", scheduledSessions: 24, onTime: 23, delays: 1, missed: 0, avgIn: "08:55 AM IST", avgOut: "05:33 PM IST", bioPct: 90, qrPct: 10, auditStatus: "COMPLIANT" },
+      { id: 15, trainer: "Tanvi Saxena", room: "Room 303", block: "MBA Block", subject: "Operations & Supply Chain", scheduledSessions: 24, onTime: 19, delays: 4, missed: 1, avgIn: "09:05 AM IST", avgOut: "05:30 PM IST", bioPct: 65, qrPct: 35, auditStatus: "REPEATED_DELAYS" },
+      { id: 16, trainer: "Harish Pillai", room: "Room 304", block: "MBA Block", subject: "Human Resource Mgmt", scheduledSessions: 24, onTime: 23, delays: 1, missed: 0, avgIn: "08:55 AM IST", avgOut: "05:31 PM IST", bioPct: 95, qrPct: 5, auditStatus: "COMPLIANT" },
+      { id: 17, trainer: "Meera Bhat", room: "Room 305", block: "MBA Block", subject: "Business Strategy", scheduledSessions: 24, onTime: 24, delays: 0, missed: 0, avgIn: "08:57 AM IST", avgOut: "05:35 PM IST", bioPct: 98, qrPct: 2, auditStatus: "COMPLIANT" },
+      { id: 18, trainer: "Rajeshwar Das", room: "Room 306", block: "MBA Block", subject: "FinTech & Blockchain", scheduledSessions: 24, onTime: 20, delays: 3, missed: 1, avgIn: "09:02 AM IST", avgOut: "05:32 PM IST", bioPct: 80, qrPct: 20, auditStatus: "REPEATED_DELAYS" },
+
+      { id: 19, trainer: "Farhan Qureshi", room: "Room 309", block: "Tech Annex", subject: "DevOps & Docker", scheduledSessions: 24, onTime: 24, delays: 0, missed: 0, avgIn: "08:52 AM IST", avgOut: "05:30 PM IST", bioPct: 100, qrPct: 0, auditStatus: "COMPLIANT" },
+      { id: 20, trainer: "Devika Pillai", room: "Room 310", block: "Tech Annex", subject: "Prompt Engineering & GenAI", scheduledSessions: 24, onTime: 23, delays: 1, missed: 0, avgIn: "08:54 AM IST", avgOut: "05:32 PM IST", bioPct: 80, qrPct: 20, auditStatus: "COMPLIANT" }
+    ];
+
+    // Live QR Verification Logs Stream
+    let qrVerificationLogs = [
+      { trainer: "Devika Pillai", room: "Room 310", method: "DYNAMIC_QR", time: "08:54:12 AM IST", ip: "172.16.42.161", geo: "12.9716° N (14m)", result: "SUCCESS" },
+      { trainer: "Karthik Nair", room: "Room 103", method: "DYNAMIC_QR", time: "08:56:02 AM IST", ip: "172.16.42.105", geo: "12.9717° N (22m)", result: "SUCCESS" },
+      { trainer: "Tariq Mansoor", room: "Room 206", method: "DYNAMIC_QR", time: "08:56:45 AM IST", ip: "172.16.42.128", geo: "12.9715° N (19m)", result: "SUCCESS" },
+      { trainer: "Pooja Sharma", room: "Room 102", method: "BIOMETRIC", time: "08:54:35 AM IST", ip: "172.16.42.1 (HOD Bio)", geo: "Terminal 01", result: "VERIFIED" }
+    ];
+
+    // State Variables
+    let trainersData = JSON.parse(JSON.stringify(initialTrainers));
+    let currentFilter = 'ALL';
+    let simulatedMinutes = 8; // 09:08 AM default
+    let simulatedSeconds = 42;
+    let qrCountdown = 10;
+    let qrCodeInstance = null;
+
+    // View Switching
+    function switchView(viewId) {
+      document.querySelectorAll('.view-section').forEach(sec => sec.classList.add('hidden'));
+      document.querySelectorAll('.view-nav-btn').forEach(btn => {
+        btn.classList.remove('bg-slate-800', 'text-white', 'border-slate-700');
+        btn.classList.add('text-slate-400', 'border-transparent');
+      });
+
+      const target = document.getElementById(`view-${viewId}`);
+      const targetBtn = document.getElementById(`view-tab-${viewId}`);
+      if (target) target.classList.remove('hidden');
+      if (targetBtn) {
+        targetBtn.classList.remove('text-slate-400', 'border-transparent');
+        targetBtn.classList.add('bg-slate-800', 'text-white', 'border-slate-700');
+      }
+
+      if (viewId === 'qr-verification') {
+        initDynamicQR();
+      } else if (viewId === 'monthly-report') {
+        renderMonthlyAuditTable();
+      }
+    }
+
+    // Live IST Clock Ticker
+    setInterval(() => {
+      simulatedSeconds++;
+      if (simulatedSeconds >= 60) {
+        simulatedSeconds = 0;
+        simulatedMinutes++;
+      }
+      renderClock();
+    }, 1000);
+
+    function renderClock() {
+      const minStr = simulatedMinutes < 10 ? '0' + simulatedMinutes : simulatedMinutes;
+      const secStr = simulatedSeconds < 10 ? '0' + simulatedSeconds : simulatedSeconds;
+      document.getElementById('live-clock').textContent = `09:${minStr}:${secStr} AM IST`;
+    }
+
+    // Dynamic 10-Second QR Code Generation & Rotation
+    function initDynamicQR() {
+      populateTrainerSelectDropdown();
+      renderQRLogs();
+      updateDynamicQRCode();
+    }
+
+    setInterval(() => {
+      qrCountdown--;
+      const timerSec = document.getElementById('qr-timer-seconds');
+      const progressBar = document.getElementById('qr-progress-bar');
+      
+      if (timerSec) timerSec.textContent = `${qrCountdown}s`;
+      if (progressBar) progressBar.style.width = `${(qrCountdown / 10) * 100}%`;
+
+      if (qrCountdown <= 0) {
+        qrCountdown = 10;
+        updateDynamicQRCode();
+      }
+    }, 1000);
+
+    function updateDynamicQRCode() {
+      const qrContainer = document.getElementById('dynamic-qr-canvas');
+      if (!qrContainer) return;
+      qrContainer.innerHTML = '';
+
+      // Cryptographic TOTP Payload token with IST timestamp & University Secret Salt
+      const randomNonce = Math.floor(100000 + Math.random() * 900000);
+      const token = `BIOPUNCH_APEX_IST_SEED_${Date.now()}_N${randomNonce}_SLOT0900`;
+
+      try {
+        qrCodeInstance = new QRCode(qrContainer, {
+          text: token,
+          width: 190,
+          height: 190,
+          colorDark: "#020617",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.H
+        });
+      } catch (e) {
+        console.error("QR Code generation error:", e);
+      }
+
+      const hashDisp = document.getElementById('qr-hash-display');
+      if (hashDisp) {
+        hashDisp.textContent = `SHA256: ${randomNonce}a9f...${token.slice(-6)} | Active IST Key`;
+      }
+    }
+
+    function populateTrainerSelectDropdown() {
+      const select = document.getElementById('qr-trainer-select');
+      if (!select) return;
+      select.innerHTML = '';
+      
+      trainersData.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t.id;
+        opt.textContent = `${t.trainer} (${t.room} - ${t.block}) [${t.status}]`;
+        select.appendChild(opt);
+      });
+    }
+
+    function simulateTrainerAppScan() {
+      const select = document.getElementById('qr-trainer-select');
+      const punchType = document.getElementById('qr-punch-type').value;
+      const trainerId = parseInt(select.value);
+      const trainer = trainersData.find(t => t.id === trainerId);
+      if (!trainer) return;
+
+      const currentTimeIST = `09:${simulatedMinutes < 10 ? '0' + simulatedMinutes : simulatedMinutes}:${simulatedSeconds < 10 ? '0' + simulatedSeconds : simulatedSeconds} AM IST`;
+      const randomRadius = Math.floor(12 + Math.random() * 25);
+      const randomIP = `172.16.42.${Math.floor(100 + Math.random() * 80)}`;
+
+      if (punchType === 'IN') {
+        trainer.status = 'GREEN';
+        trainer.punchInTime = currentTimeIST;
+        trainer.method = 'DYNAMIC_QR';
+        trainer.delayMinutes = 0;
+        trainer.ip = randomIP;
+        trainer.note = `Verified via 10s Rolling QR in-app scan (${randomRadius}m within campus perimeter).`;
+      } else {
+        trainer.punchOutTime = currentTimeIST;
+        trainer.note = `Punch-out logged via Dynamic QR at ${currentTimeIST}.`;
+      }
+
+      // Add to audit telemetry log
+      qrVerificationLogs.unshift({
+        trainer: trainer.trainer,
+        room: trainer.room,
+        method: "DYNAMIC_QR",
+        time: currentTimeIST,
+        ip: randomIP,
+        geo: `12.9716° N (${randomRadius}m)`,
+        result: "SUCCESS"
+      });
+
+      renderQRLogs();
+      renderDashboard();
+      showToast(`🎯 Dynamic QR Verification Success: ${trainer.trainer} authenticated at ${currentTimeIST} via Campus IP ${randomIP} (${randomRadius}m Geo-Fence).`, "emerald");
+    }
+
+    function renderQRLogs() {
+      const tbody = document.getElementById('qr-logs-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      qrVerificationLogs.slice(0, 8).forEach(log => {
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-800/40 transition";
+        tr.innerHTML = `
+          <td class="py-2 px-3 font-semibold text-white">${log.trainer} <span class="text-slate-400">(${log.room})</span></td>
+          <td class="py-2 px-3">
+            <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${log.method === 'DYNAMIC_QR' ? 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30' : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'}">
+              ${log.method === 'DYNAMIC_QR' ? 'Dynamic QR (10s)' : 'HOD Biometric'}
+            </span>
+          </td>
+          <td class="py-2 px-3 text-slate-300">${log.time}</td>
+          <td class="py-2 px-3 text-emerald-400">${log.ip}</td>
+          <td class="py-2 px-3 text-slate-400">${log.geo}</td>
+          <td class="py-2 px-3 text-right">
+            <span class="text-emerald-400 font-bold flex items-center justify-end gap-1">
+              <i class="ph ph-check-circle"></i> ${log.result}
+            </span>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Modal Dynamic QR Trigger
+    function openDynamicQRModal() {
+      const modal = document.getElementById('action-modal');
+      const content = document.getElementById('modal-content');
+
+      content.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div class="flex items-center gap-2">
+              <div class="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+                <i class="ph ph-qr-code text-2xl font-bold"></i>
+              </div>
+              <div>
+                <h3 class="text-base font-bold text-white">Dynamic Rolling QR Fallback Engine</h3>
+                <p class="text-xs text-slate-400">Anti-fraud token rotates every 10 seconds (IST Synchronized)</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row items-center gap-6 justify-center py-3 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+            <div class="p-3 bg-white rounded-xl shadow-xl relative">
+              <div id="modal-qr-canvas" class="w-[160px] h-[160px] flex items-center justify-center"></div>
+              <div class="scanner-laser"></div>
+            </div>
+
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center gap-2 text-emerald-400 font-semibold">
+                <i class="ph ph-shield-check text-base"></i> Geo-Fence Perimeter (&lt;50m): <b>VALIDATED</b>
+              </div>
+              <div class="flex items-center gap-2 text-indigo-400 font-semibold">
+                <i class="ph ph-wifi-high text-base"></i> Campus Subnet (172.16.42.x): <b>AUTHORIZED</b>
+              </div>
+              <div class="text-[11px] text-slate-400 leading-relaxed pt-1">
+                Trainers open the Company App &rarr; tap "Scan Campus Screen" &rarr; punch is logged and verified instantly in IST with zero proxy risk.
+              </div>
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-800 flex justify-between items-center">
+            <button onclick="switchView('qr-verification'); closeModal();" class="text-xs text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold">
+              <i class="ph ph-arrow-up-right"></i> Open Full QR Terminal &amp; Logs
+            </button>
+            <button onclick="closeModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition">
+              Close
+            </button>
+          </div>
+        </div>
+      `;
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+
+      // Generate QR in modal
+      setTimeout(() => {
+        const modalCanvas = document.getElementById('modal-qr-canvas');
+        if (modalCanvas) {
+          modalCanvas.innerHTML = '';
+          new QRCode(modalCanvas, {
+            text: `BIOPUNCH_MODAL_IST_${Date.now()}`,
+            width: 160,
+            height: 160,
+            colorDark: "#020617",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.M
+          });
+        }
+      }, 50);
+    }
+
+    // 30-Day Audit Report Table Filtering and Rendering
+    function renderMonthlyAuditTable(filteredData = monthlyAuditData) {
+      const tbody = document.getElementById('audit-table-tbody');
+      if (!tbody) return;
+      tbody.innerHTML = '';
+
+      if (filteredData.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="10" class="py-8 text-center text-slate-500">
+              <i class="ph ph-magnifying-glass text-2xl mb-1 block"></i>
+              No trainer audit records match the selected filters.
+            </td>
+          </tr>
+        `;
+        document.getElementById('audit-row-count').textContent = `Showing 0 records`;
+        return;
+      }
+
+      document.getElementById('audit-row-count').textContent = `Showing ${filteredData.length} of ${monthlyAuditData.length} trainers`;
+
+      filteredData.forEach(row => {
+        let statusBadge = "";
+        if (row.auditStatus === 'COMPLIANT') {
+          statusBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">COMPLIANT</span>`;
+        } else if (row.auditStatus === 'REPEATED_DELAYS') {
+          statusBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">REPEATED DELAYS</span>`;
+        } else if (row.auditStatus === 'ESCALATED_WARNING') {
+          statusBadge = `<span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">WARNING ISSUED</span>`;
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = "hover:bg-slate-800/40 transition";
+        tr.innerHTML = `
+          <td class="py-3 px-4 font-semibold text-white">
+            <div>${row.trainer}</div>
+            <div class="text-[10px] text-slate-400 font-mono">${row.room}</div>
+          </td>
+          <td class="py-3 px-3">
+            <div class="font-medium text-slate-200">${row.subject}</div>
+            <div class="text-[10px] text-slate-400">${row.block}</div>
+          </td>
+          <td class="py-3 px-3 text-center font-mono font-bold text-slate-300">${row.scheduledSessions}</td>
+          <td class="py-3 px-3 text-center font-mono font-bold text-emerald-400">${row.onTime}</td>
+          <td class="py-3 px-3 text-center font-mono font-bold ${row.delays > 3 ? 'text-amber-400 font-black' : 'text-slate-300'}">${row.delays}</td>
+          <td class="py-3 px-3 text-center font-mono font-bold ${row.missed > 0 ? 'text-rose-400' : 'text-slate-400'}">${row.missed}</td>
+          <td class="py-3 px-3 font-mono text-slate-300">${row.avgIn}</td>
+          <td class="py-3 px-3 font-mono text-slate-300">${row.avgOut}</td>
+          <td class="py-3 px-3 text-center font-mono text-[11px]">
+            <span class="text-emerald-400 font-bold">${row.bioPct}%</span> / <span class="text-indigo-400 font-bold">${row.qrPct}%</span>
+          </td>
+          <td class="py-3 px-4 text-right">${statusBadge}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function applyAuditFilters() {
+      const block = document.getElementById('filter-block').value;
+      const subject = document.getElementById('filter-subject').value;
+      const compliance = document.getElementById('filter-compliance-tag').value;
+      const search = document.getElementById('filter-search').value.toLowerCase().trim();
+
+      let results = monthlyAuditData.filter(item => {
+        // Block filter
+        if (block !== 'ALL' && !item.block.toLowerCase().includes(block.toLowerCase())) {
+          return false;
+        }
+
+        // Subject filter
+        if (subject !== 'ALL' && !item.subject.toLowerCase().includes(subject.toLowerCase())) {
+          return false;
+        }
+
+        // Compliance tag filter
+        if (compliance === 'REPEATED_DELAYS' && item.delays < 3) return false;
+        if (compliance === 'MISSED_PUNCH' && item.missed === 0) return false;
+        if (compliance === 'HIGH_QR' && item.qrPct < 25) return false;
+        if (compliance === 'CLEAN' && (item.delays > 1 || item.missed > 0)) return false;
+
+        // Search text
+        if (search) {
+          const matchTrainer = item.trainer.toLowerCase().includes(search);
+          const matchRoom = item.room.toLowerCase().includes(search);
+          if (!matchTrainer && !matchRoom) return false;
+        }
+
+        return true;
+      });
+
+      renderMonthlyAuditTable(results);
+    }
+
+    function resetAuditFilters() {
+      document.getElementById('filter-block').value = 'ALL';
+      document.getElementById('filter-subject').value = 'ALL';
+      document.getElementById('filter-compliance-tag').value = 'ALL';
+      document.getElementById('filter-search').value = '';
+      renderMonthlyAuditTable(monthlyAuditData);
+    }
+
+    function exportReportCSV() {
+      let csv = "Trainer Name,Room,Block,Subject,Total Sessions,On-Time,Delays (>5m),Missed,Avg Punch In (IST),Avg Punch Out (IST),Biometric %,Dynamic QR %,Audit Status\n";
+      monthlyAuditData.forEach(r => {
+        csv += `"${r.trainer}","${r.room}","${r.block}","${r.subject}",${r.scheduledSessions},${r.onTime},${r.delays},${r.missed},"${r.avgIn}","${r.avgOut}",${r.bioPct}%,${r.qrPct}%,"${r.auditStatus}"\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.setAttribute('href', url);
+      a.setAttribute('download', `BioPunch_30Day_Campus_Audit_IST.csv`);
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      showToast("📥 Exported 30-Day Campus Compliance CSV successfully!", "emerald");
+    }
+
+    // Time Advance simulation in IST
+    function advanceTime(mins) {
+      simulatedMinutes += mins;
+      
+      trainersData.forEach(t => {
+        if (t.status === 'RED') {
+          t.delayMinutes += mins;
+          t.note = `${t.delayMinutes} mins overdue! Unresolved biometric absence.`;
+        } else if (t.status === 'AMBER') {
+          t.delayMinutes += mins;
+          if (t.delayMinutes >= 9) {
+            t.status = 'RED';
+            t.note = `Excessive transit delay (${t.delayMinutes} mins IST). Auto-escalate or trigger dynamic QR!`;
+            showToast(`🚨 Escalation: ${t.room} (${t.trainer}) shifted to CRITICAL RED (+${t.delayMinutes}m)!`, "rose");
+          } else {
+            t.note = `In transit: +${t.delayMinutes} mins delay`;
+          }
+        }
+      });
+
+      renderDashboard();
+      showToast(`Fast-forwarded simulation by +${mins} minutes (IST).`, "amber");
+    }
+
+    // Reset Simulation
+    function resetSimulation() {
+      trainersData = JSON.parse(JSON.stringify(initialTrainers));
+      simulatedMinutes = 8;
+      simulatedSeconds = 15;
+      renderClock();
+      renderDashboard();
+      showToast("Reset to morning peak shift state (09:08 AM IST).", "emerald");
+    }
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-tab').forEach(btn => {
+        btn.classList.remove('bg-slate-800', 'text-white', 'border-slate-700');
+        btn.classList.add('bg-slate-900/80', 'text-slate-400', 'border-transparent');
+      });
+      const activeBtn = document.getElementById(`tab-${filter}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('bg-slate-900/80', 'text-slate-400', 'border-transparent');
+        activeBtn.classList.add('bg-slate-800', 'text-white', 'border-slate-700');
+      }
+      renderGrid();
+    }
+
+    function renderDashboard() {
+      renderKPIs();
+      renderGrid();
+      renderExceptions();
+    }
+
+    function renderKPIs() {
+      const total = trainersData.length;
+      const green = trainersData.filter(t => t.status === 'GREEN').length;
+      const amber = trainersData.filter(t => t.status === 'AMBER').length;
+      const red = trainersData.filter(t => t.status === 'RED').length;
+      const compliance = Math.round((green / total) * 100);
+
+      document.getElementById('kpi-total').textContent = total;
+      document.getElementById('kpi-green').textContent = green;
+      document.getElementById('kpi-amber').textContent = amber;
+      document.getElementById('kpi-red').textContent = red;
+      document.getElementById('kpi-compliance').textContent = `${compliance}%`;
+
+      document.getElementById('tab-ALL').textContent = `All (${total})`;
+      document.getElementById('tab-GREEN').textContent = `On-Time (${green})`;
+      document.getElementById('tab-AMBER').textContent = `In-Transit (${amber})`;
+      document.getElementById('tab-RED').textContent = `Critical Alerts (${red})`;
+      document.getElementById('exception-badge').textContent = `${amber + red} Flagged`;
+    }
+
+    function renderGrid() {
+      const container = document.getElementById('classroom-grid');
+      if (!container) return;
+      container.innerHTML = '';
+
+      let filtered = trainersData;
+      if (currentFilter !== 'ALL') {
+        filtered = trainersData.filter(t => t.status === currentFilter);
+      }
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-12 text-center text-slate-500 bg-slate-900/40 rounded-2xl border border-dashed border-slate-800">
+            <i class="ph ph-check-circle text-3xl mb-2 text-emerald-400"></i>
+            <p>No classrooms matching this filter criteria.</p>
+          </div>
+        `;
+        return;
+      }
+
+      filtered.forEach(room => {
+        let cardBg = "bg-slate-900/90 border-slate-800 hover:border-slate-700";
+        let statusBadge = "";
+
+        if (room.status === 'GREEN') {
+          cardBg = "bg-slate-900/90 border-emerald-500/30 hover:border-emerald-500/60";
+          statusBadge = `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span> Verified &amp; In Class
+            </span>`;
+        } else if (room.status === 'AMBER') {
+          cardBg = "bg-slate-900/95 border-amber-500/40 hover:border-amber-500/70";
+          statusBadge = `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-ping"></span> In Transit (+${room.delayMinutes}m)
+            </span>`;
+        } else if (room.status === 'RED') {
+          cardBg = "bg-slate-900 border-rose-500/60 hover:border-rose-500 shadow-xl shadow-rose-950/20";
+          statusBadge = `
+            <span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/40 pulse-ring">
+              <i class="ph ph-warning-circle font-bold"></i> +${room.delayMinutes}m NO PUNCH
+            </span>`;
+        }
+
+        const card = document.createElement('div');
+        card.className = `p-4 rounded-2xl border transition-all duration-200 flex flex-col justify-between ${cardBg}`;
+
+        card.innerHTML = `
+          <div>
+            <!-- Header: Room & Status Badge -->
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <span class="text-xs font-mono font-bold tracking-wide text-slate-400 uppercase">${room.block}</span>
+                <h3 class="text-base font-black text-white tracking-tight flex items-center gap-2">
+                  ${room.room}
+                </h3>
+              </div>
+              <div>${statusBadge}</div>
+            </div>
+
+            <!-- Trainer & Subject Info -->
+            <div class="mt-3 space-y-1">
+              <div class="flex items-center gap-2 text-sm font-semibold text-slate-100">
+                <i class="ph ph-user text-slate-400"></i>
+                <span>${room.trainer}</span>
+              </div>
+              <div class="text-xs text-slate-400 flex items-center gap-2">
+                <i class="ph ph-book-open text-slate-500"></i>
+                <span class="truncate" title="${room.module}">${room.module}</span>
+              </div>
+            </div>
+
+            <!-- Punch Telemetry with IST & Verification Method -->
+            <div class="mt-3.5 pt-3 border-t border-slate-800 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400 flex items-center gap-1">
+                <i class="ph ph-fingerprint text-xs"></i> 
+                ${room.punchInTime ? `<span class="text-emerald-400 font-mono font-medium">${room.punchInTime}</span>` : `<span class="text-rose-400 font-mono font-bold">No Punch Record</span>`}
+              </span>
+              <span class="text-[10px] px-1.5 py-0.5 rounded ${room.method === 'DYNAMIC_QR' ? 'bg-indigo-500/20 text-indigo-300 font-mono' : (room.method === 'BIOMETRIC' ? 'bg-emerald-500/20 text-emerald-300 font-mono' : 'bg-slate-800 text-slate-400')}">
+                ${room.method === 'DYNAMIC_QR' ? 'Dynamic QR (10s)' : (room.method === 'BIOMETRIC' ? 'Biometric' : 'Unverified')}
+              </span>
+            </div>
+
+            ${room.note ? `
+              <div class="mt-2.5 text-[11px] p-2 rounded-lg ${room.status === 'RED' ? 'bg-rose-500/10 text-rose-300 border border-rose-500/20' : 'bg-amber-500/10 text-amber-300 border border-amber-500/20'}">
+                <i class="ph ph-info font-bold mr-1"></i> ${room.note}
+              </div>
+            ` : ''}
+          </div>
+
+          <!-- Ops Action Bar -->
+          <div class="mt-4 pt-3 border-t border-slate-800 flex items-center justify-between gap-1.5">
+            ${room.status === 'GREEN' ? `
+              <span class="text-[11px] text-emerald-400/90 flex items-center gap-1 font-mono">
+                <i class="ph ph-check-circle font-bold"></i> IP: ${room.ip || '172.16.42.1'}
+              </span>
+              <button onclick="openExemptionModal(${room.id})" class="text-[11px] text-slate-400 hover:text-slate-200 px-2.5 py-1 rounded-lg hover:bg-slate-800 transition">
+                Audit Telemetry
+              </button>
+            ` : `
+              <div class="grid grid-cols-3 gap-1.5 w-full">
+                <button onclick="pingWhatsApp(${room.id})" title="Send WhatsApp alert" class="flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-500/30 transition">
+                  <i class="ph ph-whatsapp-logo text-sm"></i> WhatsApp
+                </button>
+                <button onclick="verifyViaQRShortcut(${room.id})" title="Verify via Dynamic QR" class="flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold bg-indigo-600/20 text-indigo-300 hover:bg-indigo-600/30 border border-indigo-500/30 transition">
+                  <i class="ph ph-qr-code text-sm"></i> QR Verify
+                </button>
+                <button onclick="openStandbyModal(${room.id})" title="Deploy Standby Trainer" class="flex items-center justify-center gap-1 py-1.5 px-2 rounded-lg text-[11px] font-semibold bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 border border-rose-500/30 transition">
+                  <i class="ph ph-user-switch text-sm"></i> Standby
+                </button>
+              </div>
+            `}
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function renderExceptions() {
+      const container = document.getElementById('exception-list');
+      if (!container) return;
+      container.innerHTML = '';
+
+      const exceptions = trainersData.filter(t => t.status !== 'GREEN');
+
+      if (exceptions.length === 0) {
+        container.innerHTML = `
+          <div class="py-6 text-center text-xs text-emerald-400 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+            <i class="ph ph-shield-check text-xl mb-1 block"></i>
+            All 20 rooms are fully compliant &amp; lecturing.
+          </div>
+        `;
+        return;
+      }
+
+      exceptions.sort((a, b) => (b.status === 'RED' ? 1 : 0) - (a.status === 'RED' ? 1 : 0) || b.delayMinutes - a.delayMinutes);
+
+      exceptions.forEach(ex => {
+        const item = document.createElement('div');
+        item.className = `p-3 rounded-xl border text-xs flex flex-col gap-2 ${
+          ex.status === 'RED' 
+            ? 'bg-rose-950/40 border-rose-500/40 text-rose-200' 
+            : 'bg-amber-950/30 border-amber-500/30 text-amber-200'
+        }`;
+
+        item.innerHTML = `
+          <div class="flex items-start justify-between gap-1">
+            <div>
+              <span class="font-bold text-white text-xs">${ex.room}</span>
+              <span class="text-slate-400"> • ${ex.trainer}</span>
+            </div>
+            <span class="px-2 py-0.5 rounded text-[10px] font-bold ${
+              ex.status === 'RED' ? 'bg-rose-500/25 text-rose-300' : 'bg-amber-500/25 text-amber-300'
+            }">
+              +${ex.delayMinutes}m Overdue
+            </span>
+          </div>
+
+          <p class="text-[11px] text-slate-300 leading-tight">
+            ${ex.note || 'Biometric punch not captured at HOD corridor device.'}
+          </p>
+
+          <div class="flex items-center justify-between pt-1 text-[11px]">
+            <span class="text-slate-400 font-mono text-[10px]">${ex.scheduled}</span>
+            <div class="flex items-center gap-1.5">
+              <button onclick="verifyViaQRShortcut(${ex.id})" class="px-2 py-1 rounded bg-indigo-600/40 hover:bg-indigo-600/60 text-indigo-200 text-[10px] font-semibold transition flex items-center gap-1 border border-indigo-500/30">
+                <i class="ph ph-qr-code"></i> Dynamic QR
+              </button>
+              <button onclick="openStandbyModal(${ex.id})" class="px-2 py-1 rounded bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-semibold transition">
+                Deploy Standby
+              </button>
+            </div>
+          </div>
+        `;
+        container.appendChild(item);
+      });
+    }
+
+    // Action Handlers
+    function pingWhatsApp(id) {
+      const trainer = trainersData.find(t => t.id === id);
+      if (!trainer) return;
+      showToast(`📲 WhatsApp Alert with Dynamic QR Link dispatched to ${trainer.trainer} (${trainer.phone})!`, "emerald");
+    }
+
+    function verifyViaQRShortcut(id) {
+      const trainer = trainersData.find(t => t.id === id);
+      if (!trainer) return;
+      
+      const currentTimeIST = `09:${simulatedMinutes < 10 ? '0' + simulatedMinutes : simulatedMinutes}:${simulatedSeconds < 10 ? '0' + simulatedSeconds : simulatedSeconds} AM IST`;
+      const randomIP = `172.16.42.${Math.floor(100 + Math.random() * 80)}`;
+      
+      trainer.status = 'GREEN';
+      trainer.punchInTime = currentTimeIST;
+      trainer.method = 'DYNAMIC_QR';
+      trainer.delayMinutes = 0;
+      trainer.ip = randomIP;
+      trainer.note = "Verified via Dynamic 10s QR code fallback. Class session confirmed.";
+
+      qrVerificationLogs.unshift({
+        trainer: trainer.trainer,
+        room: trainer.room,
+        method: "DYNAMIC_QR",
+        time: currentTimeIST,
+        ip: randomIP,
+        geo: "12.9716° N (18m)",
+        result: "SUCCESS"
+      });
+
+      renderDashboard();
+      renderQRLogs();
+      showToast(`✅ Room ${trainer.room} (${trainer.trainer}) verified via Dynamic QR!`, "emerald");
+    }
+
+    function triggerHODCongestionClear() {
+      let resolvedCount = 0;
+      trainersData.forEach(t => {
+        if (t.status === 'AMBER') {
+          t.status = 'GREEN';
+          t.delayMinutes = 0;
+          t.punchInTime = "09:07:30 AM IST (HOD Cleared)";
+          t.method = 'BIOMETRIC';
+          t.note = "Transit completed. Class initiated.";
+          resolvedCount++;
+        }
+      });
+      renderDashboard();
+      showToast(`⚡ HOD line cleared: ${resolvedCount} in-transit trainers marked verified in IST!`, "emerald");
+    }
+
+    function broadcastAlert() {
+      showToast("📢 Broadcast SMS in IST sent to Campus Coordinators to monitor corridors.", "rose");
+    }
+
+    function openStandbyModal(targetRoomId = null) {
+      const targetRoom = targetRoomId ? trainersData.find(t => t.id === targetRoomId) : null;
+      const modal = document.getElementById('action-modal');
+      const content = document.getElementById('modal-content');
+
+      let targetHeader = targetRoom 
+        ? `Deploy Standby Replacement for <span class="text-rose-400 font-bold">${targetRoom.room}</span> (${targetRoom.trainer})`
+        : `Campus Standby Trainers Pool`;
+
+      content.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex items-center gap-2">
+            <div class="p-2 rounded-xl bg-indigo-500/20 text-indigo-400">
+              <i class="ph ph-user-switch text-xl"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-white leading-tight">${targetHeader}</h3>
+              <p class="text-xs text-slate-400">On-campus buffer trainers available immediately for 09:00 AM IST shift</p>
+            </div>
+          </div>
+
+          <div class="space-y-2.5 pt-2">
+            ${standbyTrainers.map((st, idx) => `
+              <div class="p-3 rounded-xl bg-slate-950/60 border border-slate-800 flex items-center justify-between gap-3 hover:border-slate-700 transition">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold text-white">${st.name}</span>
+                    <span class="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-medium">Available</span>
+                  </div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Specialty: <span class="text-slate-300">${st.expertise}</span></div>
+                  <div class="text-[10px] text-slate-500 flex items-center gap-1 mt-0.5">
+                    <i class="ph ph-map-pin"></i> ${st.location} (2 mins reach time)
+                  </div>
+                </div>
+                <button onclick="assignStandby('${st.name}', ${targetRoomId ? targetRoomId : 'null'})" class="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition flex items-center gap-1 shadow-sm shadow-emerald-950">
+                  <i class="ph ph-check"></i> Assign
+                </button>
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="pt-3 border-t border-slate-800 flex justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 transition">
+              Close
+            </button>
+          </div>
+        </div>
+      `;
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function assignStandby(standbyName, roomId) {
+      if (!roomId) {
+        const firstCrit = trainersData.find(t => t.status === 'RED');
+        if (firstCrit) {
+          roomId = firstCrit.id;
+        } else {
+          showToast(`Standby ${standbyName} is on alert. No critical classrooms vacant!`, "indigo");
+          closeModal();
+          return;
+        }
+      }
+
+      const room = trainersData.find(t => t.id === roomId);
+      if (room) {
+        const oldTrainer = room.trainer;
+        room.trainer = `${standbyName} (Standby Replaced)`;
+        room.status = 'GREEN';
+        room.delayMinutes = 0;
+        room.punchInTime = `09:${simulatedMinutes < 10 ? '0' + simulatedMinutes : simulatedMinutes} AM IST (Standby Deploy)`;
+        room.method = 'DYNAMIC_QR';
+        room.note = `Replaced absent trainer ${oldTrainer}. Class session rescued without idle student delay!`;
+        renderDashboard();
+        showToast(`🚀 Standby ${standbyName} dispatched to ${room.room} in IST!`, "emerald");
+      }
+      closeModal();
+    }
+
+    function openExemptionModal(roomId) {
+      const room = trainersData.find(t => t.id === roomId);
+      if (!room) return;
+      const modal = document.getElementById('action-modal');
+      const content = document.getElementById('modal-content');
+
+      content.innerHTML = `
+        <div class="space-y-4">
+          <div class="flex items-center gap-2 border-b border-slate-800 pb-3">
+            <div class="p-2 rounded-xl bg-slate-800 text-slate-200">
+              <i class="ph ph-shield-check text-xl"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-white">${room.room} Full Telemetry Audit</h3>
+              <p class="text-xs text-slate-400">${room.block} • Trainer: ${room.trainer}</p>
+            </div>
+          </div>
+
+          <div class="bg-slate-950/70 rounded-xl p-4 border border-slate-800 text-xs space-y-2.5">
+            <div class="flex justify-between"><span class="text-slate-400">Subject:</span> <span class="font-semibold text-slate-200">${room.module}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Shift Slot:</span> <span class="text-slate-200 font-mono">${room.scheduled}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Punch-In IST:</span> <span class="text-emerald-400 font-mono font-bold">${room.punchInTime || 'No Record'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Punch-Out IST:</span> <span class="text-indigo-400 font-mono font-bold">${room.punchOutTime || 'Shift in progress (Active)'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Verification Mechanism:</span> <span class="text-slate-200 font-mono">${room.method === 'DYNAMIC_QR' ? 'Dynamic 10s Rolling QR Code' : 'Terminal #01 Biometric Fingerprint'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Campus Gateway IP:</span> <span class="text-emerald-400 font-mono font-semibold">${room.ip || '172.16.42.1'}</span></div>
+            <div class="flex justify-between"><span class="text-slate-400">Geo Perimeter:</span> <span class="text-slate-200 font-mono">12.9716° N, 77.5946° E (±18m campus zone)</span></div>
+          </div>
+
+          <div class="pt-2 border-t border-slate-800 flex justify-end">
+            <button onclick="closeModal()" class="px-4 py-2 rounded-xl text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white transition">
+              Dismiss Audit
+            </button>
+          </div>
+        </div>
+      `;
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeModal() {
+      const modal = document.getElementById('action-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function showToast(message, type = 'emerald') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      
+      let borderClass = 'border-emerald-500/40 bg-slate-900 text-slate-100 shadow-emerald-950/40';
+      let icon = '<i class="ph ph-check-circle text-emerald-400 text-lg shrink-0"></i>';
+
+      if (type === 'rose') {
+        borderClass = 'border-rose-500/40 bg-slate-900 text-slate-100 shadow-rose-950/40';
+        icon = '<i class="ph ph-warning-circle text-rose-400 text-lg shrink-0"></i>';
+      } else if (type === 'amber') {
+        borderClass = 'border-amber-500/40 bg-slate-900 text-slate-100 shadow-amber-950/40';
+        icon = '<i class="ph ph-clock text-amber-400 text-lg shrink-0"></i>';
+      } else if (type === 'indigo') {
+        borderClass = 'border-indigo-500/40 bg-slate-900 text-slate-100 shadow-indigo-950/40';
+        icon = '<i class="ph ph-broadcast text-indigo-400 text-lg shrink-0"></i>';
+      }
+
+      toast.className = `pointer-events-auto p-3.5 rounded-xl border ${borderClass} shadow-2xl flex items-center gap-2.5 text-xs max-w-sm transition-all duration-300 transform translate-y-2 opacity-0`;
+      toast.innerHTML = `${icon} <span class="flex-1 leading-snug font-medium">${message}</span>`;
+
+      container.appendChild(toast);
+
+      requestAnimationFrame(() => {
+        toast.classList.remove('translate-y-2', 'opacity-0');
+      });
+
+      setTimeout(() => {
+        toast.classList.add('opacity-0', '-translate-y-2');
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    // Initialize Dashboard on load
+    window.onload = function() {
+      renderClock();
+      renderDashboard();
+      initDynamicQR();
+      renderMonthlyAuditTable();
+    };
+  </script>
+</body>
+</html>
